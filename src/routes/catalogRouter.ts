@@ -1,0 +1,22 @@
+import { Router } from 'express';
+import { CatalogController } from '../controllers/catalogController.ts';
+
+const router = Router();
+const controller = new CatalogController();
+router.get('/users', controller.users);
+router.post('/users', controller.createUser);
+router.get('/menu-items', controller.menuItems);
+router.post('/menu-items', controller.createMenuItem);
+router.get('/menu-items/:id', controller.menuItem);
+router.put('/menu-items/:id', controller.updateMenuItem);
+router.delete('/menu-items/:id', controller.deleteMenuItem);
+router.get('/reviews', controller.reviews);
+router.post('/reviews', controller.createReview);
+router.delete('/reviews/:id', controller.deleteReview);
+router.post('/likes', controller.createLike);
+router.delete('/likes/:id', controller.deleteLike);
+router.get('/flags', controller.flags);
+router.put('/flags/:id', controller.updateFlag);
+router.get('/audit', controller.auditLogs);
+router.post('/audit', controller.createAuditLog);
+export { router as catalogRouter };
