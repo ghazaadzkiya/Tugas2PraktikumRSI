@@ -1,13 +1,11 @@
-# Hands-on 2 — Akses Database dengan Drizzle ORM
+# Tugas 3 — Review Kantin API
 
-Hands-on ini mengganti akses data dari query SQL manual menjadi **ORM (Drizzle)**,
-tetap memakai arsitektur berlapis (Repository → Service → Controller → Router).
-
-> File ini adalah sumber langkah utama.
+API memakai arsitektur Repository → Service → Controller → Router, Drizzle ORM untuk SQL
+Server, Zod untuk validasi, JWT untuk autentikasi, dan middleware role untuk otorisasi.
 
 ## Prinsip
 
-- **Skema DDL tetap dikelola di `../db/*.sql`** (recall ERD di SQL Server).
+- Skema database dibuat dari materi pertemuan-03; pemetaan Drizzle dan seed untuk Tugas 3 berada di `src/db/`.
 - Drizzle dipakai untuk **query bertipe** dari aplikasi.
 - `src/db/schema.ts` **ditulis manual**, bukan hasil `drizzle-kit pull`. Alasannya:
   intropeksi (`pull`) Drizzle untuk MSSQL masih **RC** dan belum stabil.
@@ -15,23 +13,28 @@ tetap memakai arsitektur berlapis (Repository → Service → Controller → Rou
 ## Prasyarat
 
 - Node.js **>= 22.18.0**, npm
-- SQL Server aktif + database sudah disiapkan:
+- SQL Server aktif + database `review_kantin` sudah disiapkan. Jika belum, jalankan skrip setup dari `New folder/praktikum-rsi-2026/pertemuan-03-database-backend-crud/db/`:
 
 ```powershell
-sqlcmd -S localhost -E -C -i ..\db\00-setup-mixed-mode.sql       # sekali saja
-sqlcmd -S localhost -E -C -i ..\db\01-create-database-and-user.sql
-sqlcmd -S localhost -E -C -i ..\db\02-schema.sql
-sqlcmd -S localhost -E -C -i ..\db\03-seed.sql
+sqlcmd -S localhost -E -C -i "..\New folder\praktikum-rsi-2026\pertemuan-03-database-backend-crud\db\00-setup-mixed-mode.sql"       # sekali saja
+sqlcmd -S localhost -E -C -i "..\New folder\praktikum-rsi-2026\pertemuan-03-database-backend-crud\db\01-create-database-and-user.sql"
+sqlcmd -S localhost -E -C -i "..\New folder\praktikum-rsi-2026\pertemuan-03-database-backend-crud\db\02-schema.sql"
+sqlcmd -S localhost -E -C -i "..\New folder\praktikum-rsi-2026\pertemuan-03-database-backend-crud\db\03-seed.sql"
+```
+
+Untuk pendaftaran login, sesudah schema dan seed tersedia, jalankan juga:
+
+```powershell
+sqlcmd -S localhost -E -C -i src\db\seed-password-hashes.sql
 ```
 
 ---
-
 ## Langkah 1 — Buat project & install dependencies
 
 ```bash
 npm init -y
-npm install express mssql dotenv drizzle-orm@1.0.0-rc.5-5935859 swagger-ui-express swagger-autogen
-npm install -D typescript @types/express @types/mssql @types/node tsx drizzle-kit@1.0.0-rc.5-5935859 @types/swagger-ui-express
+npm install express mssql dotenv drizzle-orm@1.0.0-rc.5-5935859 swagger-ui-express @asteasolutions/zod-to-openapi zod bcryptjs jsonwebtoken
+npm install -D typescript @types/express @types/mssql @types/node tsx drizzle-kit@1.0.0-rc.5-5935859 @types/swagger-ui-express @types/jsonwebtoken
 ```
 
 > Versi `drizzle-orm`/`drizzle-kit` dipatok ke RC yang sudah diuji. Drizzle untuk MSSQL
@@ -44,20 +47,13 @@ npm install -D typescript @types/express @types/mssql @types/node tsx drizzle-ki
   "main": "src/index.ts",
   "scripts": {
     "start": "tsx src/index.ts",
-    "prestart": "npm run docs:gen",
-    "dev": "tsx watch src/index.ts",
-    "predev": "npm run docs:gen",
-    "docs:gen": "tsx src/docs/swagger.ts"
+    "dev": "tsx watch src/index.ts"
   },
   "type": "commonjs"
 }
 ```
 
 ## Langkah 2 — Konfigurasi `.env`
-
-```powershell
-Copy-Item .env.example .env
-```
 
 ```
 DB_SERVER=localhost
@@ -67,6 +63,9 @@ DB_PASSWORD=Praktikum2026!
 DB_NAME=review_kantin
 DB_ENCRYPT=false
 DB_TRUST_SERVER_CERTIFICATE=true
+JWT_SECRET=isi-dengan-secret-acak-minimal-32-byte
+JWT_EXPIRES_IN=2h
+BCRYPT_SALT_ROUNDS=10
 ```
 
 > Nilai yang mengandung `#` wajib dibungkus tanda kutip (dotenv menganggap `#` komentar).
@@ -225,7 +224,7 @@ private toDto(row: StallRow): StallResponseDto {
 
 ## Langkah 7 — Controller, Router, dan Entry point
 
-- `src/controllers/stallController.ts` — handler Express, memetakan `STALL_NOT_FOUND` → 404.
+- `src/controllers/stallController.ts` — handler Express; `NotFoundError` dipetakan oleh error handler terpusat.
 - `src/routes/stallRouter.ts` — pemetaan endpoint.
 - `src/index.ts` — server Express + `GET /health` (`SELECT 1` via Drizzle).
 
@@ -235,32 +234,18 @@ private toDto(row: StallRow): StallResponseDto {
 npm run dev
 ```
 
-| Method | Endpoint | Hasil |
+| Method | Endpoint | Akses |
 | --- | --- | --- |
-| GET | `/health` | `200` koneksi DB OK |
-| GET | `/docs` | Swagger UI (spec hasil generate `swagger-autogen`) |
-| GET | `/api/v1/stalls?search=&category=&page=&limit=` | `200` daftar + `meta {page,limit,total}` |
-| GET | `/api/v1/stalls/:id` | `200` detail, `404` bila tak ada |
-| GET | `/api/v1/stalls/:id/menus` | `200` daftar menu (join) |
-| POST | `/api/v1/stalls` | `201` stall baru |
-| PUT | `/api/v1/stalls/:id` | `200` stall ter-update |
-| DELETE | `/api/v1/stalls/:id` | `200` stall terhapus |
-| GET | `/api/v1/users` | `200` daftar user |
-| POST | `/api/v1/users` | `201` user baru |
-| GET | `/api/v1/menu-items` | `200` daftar menu + join stall |
-| POST | `/api/v1/menu-items` | `201` menu baru |
-| GET | `/api/v1/menu-items/:id` | `200` detail menu + join stall |
-| PUT | `/api/v1/menu-items/:id` | `200` menu ter-update |
-| DELETE | `/api/v1/menu-items/:id` | `200` menu terhapus |
-| GET | `/api/v1/reviews?stallId=` | `200` daftar review + join user |
-| POST | `/api/v1/reviews` | `201` review baru |
-| DELETE | `/api/v1/reviews/:id` | `200` review terhapus |
-| POST | `/api/v1/likes` | `201` like baru dan counter review bertambah |
-| DELETE | `/api/v1/likes/:id` | `200` like terhapus dan counter review berkurang |
-| GET | `/api/v1/flags` | `200` daftar flag |
-| PUT | `/api/v1/flags/:id` | `200` status flag ter-update |
-| GET | `/api/v1/audit` | `200` daftar audit log |
-| POST | `/api/v1/audit` | `201` audit log baru |
+| GET | `/health`, `/docs` | publik |
+| GET | `/api/v1/stalls`, `/api/v1/stalls/:id`, `/api/v1/stalls/:id/menus` | publik |
+| POST | `/api/v1/auth/register`, `/api/v1/auth/login` | publik |
+| GET | `/api/v1/auth/me`, `/api/v1/auth/profile` | login, semua role |
+| POST | `/api/v1/stalls` | owner, admin |
+| PUT | `/api/v1/stalls/:id` | owner (warung miliknya), admin |
+| DELETE | `/api/v1/stalls/:id` | admin |
+| POST | `/api/v1/stalls/:id/reviews` | login, semua role |
+| GET | `/api/v1/admin/reports` | admin |
+| Endpoint lama lain di `/api/v1` (users, menu-items, reviews, likes, flags, audit) | admin |
 
 Contoh:
 
@@ -272,49 +257,20 @@ curl.exe "http://localhost:3000/api/v1/stalls?category=Minuman&limit=2&page=1"
 
 ## Dokumentasi API (Swagger UI)
 
-Dokumentasi dibangun dengan **`swagger-autogen`**: ia memindai file route/entry,
-mendeteksi **path + method secara otomatis**, sedangkan parameter & response ditambahkan
-lewat komentar singkat `#swagger.*` di dalam handler. Hasilnya disajikan lewat
-**`swagger-ui-express`** di `http://localhost:3000/docs`.
-
-Alur:
-
-1. `npm run docs:gen` — memindai `src/index.ts` (beserta router yang diimpor) dan
-   menghasilkan `src/docs/swagger-output.json`.
-2. `npm run dev` — menyajikan spec tersebut di `/docs`.
-   (`predev`/`prestart` otomatis menjalankan `docs:gen` sebelum server start.)
-
-Karena `#swagger.*` harus berada di dalam body handler, route ditulis sebagai handler
-**inline** yang memanggil controller, mis.:
-
-```ts
-stallRouter.get('/', (req, res) => {
-  // #swagger.parameters['search']   = { in: 'query', type: 'string' }
-  // #swagger.parameters['category'] = { in: 'query', type: 'string' }
-  // #swagger.parameters['page']     = { in: 'query', type: 'integer' }
-  // #swagger.parameters['limit']    = { in: 'query', type: 'integer' }
-  // #swagger.responses[200] = { description: 'Daftar warung' }
-  return stallController.getStalls(req, res);
-});
-
-stallRouter.post('/', (req, res) => {
-  // #swagger.parameters['body'] = { in: 'body', required: true, schema: { $ref: '#/definitions/StallInput' } }
-  // #swagger.responses[201] = { description: 'Warung dibuat' }
-  return stallController.createStall(req, res);
-});
-```
+Dokumentasi dibangun sebagai **OpenAPI 3.0** dari schema Zod yang dipakai middleware
+validasi, menggunakan `@asteasolutions/zod-to-openapi`. Tidak ada file spec yang perlu
+digenerate manual: server menyajikan Swagger UI di `/docs` dan dokumen JSON di
+`/docs/swagger.json`. Skema `bearerAuth` memakai HTTP Bearer/JWT; masukkan token melalui
+tombol **Authorize**. Nilai otorisasi dipertahankan ketika halaman docs dimuat ulang.
 
 File terkait:
 
-- `src/docs/swagger.ts` — definisi `info`, `servers`, `definitions.StallInput`, lalu `swaggerAutogen()(outputFile, endpointsFiles, doc)`.
-- `src/docs/swagger-output.json` — **hasil generate** (di-`.gitignore`, jangan diedit manual).
-- `src/routes/stallRouter.ts` — handler inline + `#swagger.parameters`/`#swagger.responses`.
-- `src/index.ts` — `app.use('/docs', swaggerUi.serve, swaggerUi.setup(swaggerDocument));`
+- `src/docs/openapi.ts` — definisi komponen, security scheme, response, serta semua route.
+- `src/schemas/zodOpenApi.ts` — satu instance Zod dengan dukungan metadata OpenAPI.
+- `src/schemas/*.ts` — schema validasi yang juga menjadi sumber request body/query/params docs.
+- `src/index.ts` — endpoint `/docs/swagger.json` dan Swagger UI `/docs`.
 
-Buka `/docs`, lalu klik **Try it out** untuk mengisi parameter/body dan mengirim request.
-
-> Spec yang dihasilkan berformat **Swagger 2.0** — karena itu schema dirujuk lewat
-> `#/definitions/...` (bukan `#/components/schemas/...`).
+Spec menggunakan `#/components/schemas/...` sesuai OpenAPI 3.0.
 
 ---
 
@@ -328,36 +284,57 @@ Bila terbiasa dengan contoh Drizzle (Postgres/MySQL), ada beberapa perbedaan:
   Untuk insert, `.output()` dipanggil **sebelum** `.values()`.
 - **`decimal`** dikembalikan sebagai **string** oleh driver; konversi ke `Number` bila perlu.
 - **`drizzle-kit pull`** (introspeksi) untuk MSSQL masih RC dan belum stabil, sehingga
-  `schema.ts` ditulis manual dan DDL tetap di `../db/*.sql`.
+  `src/db/schema.ts` ditulis manual dan DDL database tetap mengikuti materi pertemuan-03.
 
 ## Struktur Project
 
+```text
+src/
+  controllers/    # auth, profile, stall, review, admin
+  db/             # koneksi, schema, seed SQL
+  docs/           # OpenAPI 3 dari schema Zod
+  dtos/           # response DTO
+  errors/         # error aplikasi
+  middlewares/    # authentication, authorization, validasi, error handler
+  repositories/   # query Drizzle
+  routes/         # auth, stall, admin, dan endpoint admin lama
+  schemas/        # schema Zod untuk body, params, query
+  services/       # auth, token, stall, review, report
+  index.ts
 ```
-hands-on-2-orm-drizzle/
-├─ README.md
-├─ .env.example
-├─ drizzle.config.ts          # konfigurasi drizzle-kit (referensi)
-├─ package.json  tsconfig.json
-└─ src/
-   ├─ db/
-   │  ├─ schema.ts            # pemetaan tabel (manual)
-   │  └─ index.ts            # koneksi Drizzle
-   ├─ docs/
-   │  ├─ swagger.ts           # generator spec (swagger-autogen)
-   │  └─ swagger-output.json  # hasil generate (gitignored)
-   ├─ dtos/stallDto.ts
-   ├─ repositories/
-   │  ├─ stallRepository.ts
-   │  └─ menuItemRepository.ts
-  │  └─ catalogRepository.ts
-  ├─ services/
-  │  ├─ stallService.ts
-  │  └─ catalogService.ts
-  ├─ controllers/
-  │  ├─ stallController.ts
-  │  └─ catalogController.ts
-  ├─ routes/
-  │  ├─ stallRouter.ts
-  │  └─ catalogRouter.ts
-   └─ index.ts
-```
+
+## Tugas 3 — Validasi, Error, dan Otorisasi
+
+Konfigurasi `.env` dapat dibuat dari `.env.example`; isi `JWT_SECRET` dengan secret acak
+yang panjang. Sebelum menguji login akun seed, jalankan `src/db/seed-password-hashes.sql`
+di database `review_kantin`. Ketiga akun uji memakai password `rahasia123`:
+
+| Email | Role |
+| --- | --- |
+| `admin@kantin.test` | admin |
+| `tini@kantin.test` | owner |
+| `bagas@student.test` | customer |
+
+Endpoint yang berlaku:
+
+| Method | Endpoint | Akses |
+| --- | --- | --- |
+| GET | `/api/v1/stalls`, `/api/v1/stalls/:id`, `/api/v1/stalls/:id/menus` | publik |
+| POST | `/api/v1/auth/register`, `/api/v1/auth/login` | publik |
+| GET | `/api/v1/auth/me`, `/api/v1/auth/profile` | login, semua role |
+| POST | `/api/v1/stalls` | owner, admin |
+| PUT | `/api/v1/stalls/:id` | pemilik warung, admin |
+| DELETE | `/api/v1/stalls/:id` | admin |
+| POST | `/api/v1/stalls/:id/reviews` | login, semua role |
+| GET | `/api/v1/admin/reports` | admin |
+| Endpoint lama lain di `/api/v1` | admin |
+
+Kirim token login melalui header `Authorization: Bearer <token>`. Role registrasi publik
+selalu `customer`; field `role`, `ownerId`, dan `userId` dari body ditolak. Error validasi
+menggunakan `{ "status": "fail", "message": "Validasi gagal", "errors": [{ "field": "name", "message": "name minimal 3 karakter" }] }`.
+
+Validasi mengikuti spesifikasi tugas: pencarian warung maksimal 100 karakter, kategori
+maksimal 50, halaman minimal 1, limit 1–100 (default 10); ID harus integer positif; nama
+warung 3–100 karakter; email diretrim, diubah lowercase dan divalidasi; password register
+8–72 karakter; rating review integer 1–5; komentar maksimal 1000 karakter. `PUT /stalls/:id`
+menerima semua field warung secara opsional.

@@ -30,7 +30,7 @@ BEGIN
 END
 GO
 
--- =============================================================== STALLS
+-- =============================================================== STALLSbu
 IF NOT EXISTS (SELECT 1 FROM dbo.STALLS)
 BEGIN
     SET IDENTITY_INSERT dbo.STALLS ON;
@@ -109,26 +109,18 @@ BEGIN
 END
 GO
 
-PRINT 'Seed selesai.';
-GO
-
-SELECT 'USERS' AS tabel, COUNT(*) AS jumlah FROM dbo.USERS
-UNION ALL SELECT 'STALLS', COUNT(*) FROM dbo.STALLS
-UNION ALL SELECT 'MENU_ITEMS', COUNT(*) FROM dbo.MENU_ITEMS
-UNION ALL SELECT 'REVIEWS', COUNT(*) FROM dbo.REVIEWS;
-GO
 -- ================================================================ LIKES
 IF NOT EXISTS (SELECT 1 FROM dbo.LIKES)
 BEGIN
     SET IDENTITY_INSERT dbo.LIKES ON;
     INSERT INTO dbo.LIKES (id, review_id, user_id, created_at) VALUES
-        (1, 1,  14, SYSDATETIME()),
-        (2, 1,  15, SYSDATETIME()),
-        (3, 6,  12, SYSDATETIME()),
-        (4, 11, 13, SYSDATETIME()),
-        (5, 11, 15, SYSDATETIME()),
-        (6, 14, 13, SYSDATETIME()),
-        (7, 16, 15, SYSDATETIME());
+        (1, 4,  13, SYSDATETIME()),
+        (2, 4,  14, SYSDATETIME()),
+        (3, 5,  12, SYSDATETIME()),
+        (4, 8,  15, SYSDATETIME()),
+        (5, 10, 12, SYSDATETIME()),
+        (6, 10, 13, SYSDATETIME()),
+        (7, 14, 14, SYSDATETIME());
     SET IDENTITY_INSERT dbo.LIKES OFF;
     DBCC CHECKIDENT ('dbo.LIKES', RESEED, 7) WITH NO_INFOMSGS;
  
@@ -150,11 +142,11 @@ IF NOT EXISTS (SELECT 1 FROM dbo.FLAGS)
 BEGIN
     SET IDENTITY_INSERT dbo.FLAGS ON;
     INSERT INTO dbo.FLAGS (id, review_id, reported_by, reason, status) VALUES
-        (1, 12, 15, N'Komentar tidak menjelaskan alasan rating', N'pending'),
-        (2, 3,  13, N'Ulasan terindikasi duplikat',              N'dismissed'),
-        (3, 15, 12, N'Mengandung kata tidak pantas',             N'resolved'),
-        (4, 6,  15, N'Terindikasi promosi',                      N'pending'),
-        (5, 11, 14, N'Rating tidak sesuai komentar',             N'pending');
+        (1, 2,  14, N'Komentar dianggap tidak relevan',   N'pending'),
+        (2, 7,  12, N'Terindikasi spam/promosi',          N'dismissed'),
+        (3, 13, 15, N'Bahasa kasar',                       N'resolved'),
+        (4, 16, 13, N'Duplikat review sebelumnya',         N'pending'),
+        (5, 9,  12, N'Rating tidak sesuai komentar',       N'pending');
     SET IDENTITY_INSERT dbo.FLAGS OFF;
     DBCC CHECKIDENT ('dbo.FLAGS', RESEED, 5) WITH NO_INFOMSGS;
     PRINT 'Seed FLAGS selesai.';
@@ -166,10 +158,10 @@ IF NOT EXISTS (SELECT 1 FROM dbo.AUDIT_LOGS)
 BEGIN
     SET IDENTITY_INSERT dbo.AUDIT_LOGS ON;
     INSERT INTO dbo.AUDIT_LOGS (id, user_id, action, target_table, target_id, metadata) VALUES
-        (1, 14, N'CREATE', N'REVIEWS', 6,  N'{"rating":4,"comment":"Enak"}'),
-        (2, 15, N'CREATE', N'REVIEWS', 10, N'{"rating":5,"comment":"Mantap"}'),
-        (3, 14, N'CREATE', N'LIKES',   1,  N'{"review_id":1}'),
-        (4, 15, N'CREATE', N'FLAGS',   1,  N'{"review_id":12,"reason":"Komentar tidak menjelaskan alasan rating"}'),
+        (1, 12, N'CREATE', N'REVIEWS', 1,  N'{"rating":5,"comment":"Enak!"}'),
+        (2, 13, N'CREATE', N'REVIEWS', 2,  N'{"rating":4,"comment":"Oke"}'),
+        (3, 13, N'CREATE', N'LIKES',   1,  N'{"review_id":4}'),
+        (4, 14, N'CREATE', N'FLAGS',   1,  N'{"review_id":2,"reason":"Komentar dianggap tidak relevan"}'),
         (5, 1,  N'UPDATE', N'FLAGS',   3,  N'{"status":"resolved"}'),
         (6, 1,  N'UPDATE', N'FLAGS',   2,  N'{"status":"dismissed"}');
     SET IDENTITY_INSERT dbo.AUDIT_LOGS OFF;
@@ -178,9 +170,9 @@ BEGIN
 END
 GO
 
-PRINT 'Seed tambahan selesai.';
+PRINT 'Seed tambaha selesai.';
 GO
- 
+
 SELECT 'USERS' AS tabel, COUNT(*) AS jumlah FROM dbo.USERS
 UNION ALL SELECT 'STALLS', COUNT(*) FROM dbo.STALLS
 UNION ALL SELECT 'MENU_ITEMS', COUNT(*) FROM dbo.MENU_ITEMS
